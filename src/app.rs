@@ -37,6 +37,7 @@ pub struct AppModel {
     pub settings: pages::settings::Settings,
 
     pomodoro_tick_state: PomodoroTickState,
+    blink_tick_state: BlinkTickState,
 }
 
 /// Messages emitted by the application and its widgets.
@@ -55,10 +56,22 @@ pub enum Message {
     PomodoroTick,
     StartPomodoroTimer,
     PausePomodoroTimer,
+    BlinkTick,
+    StartBlinkTimer,
+    StopBlinkTimer,
 }
 
 #[derive(Default)]
 enum PomodoroTickState {
+    #[default]
+    Idle,
+    Ticking {
+        last_tick: Instant,
+    },
+}
+
+#[derive(Default)]
+enum BlinkTickState {
     #[default]
     Idle,
     Ticking {
@@ -144,6 +157,7 @@ impl Application for AppModel {
             pomodoro: pages::pomodoro::Pomodoro::default(),
             settings: pages::settings::Settings::default(),
             pomodoro_tick_state: PomodoroTickState::Idle,
+            blink_tick_state: BlinkTickState::Idle,
         };
 
         // Create a startup command that sets the window title.
@@ -212,7 +226,13 @@ impl Application for AppModel {
                 time::every(Duration::from_secs(1)).map(|_instant| Message::PomodoroTick)
             }
         };
-        Subscription::batch(vec![tick])
+        let blink_tick = match self.blink_tick_state {
+            BlinkTickState::Idle => Subscription::none(),
+            BlinkTickState::Ticking { .. } => {
+                time::every(Duration::from_millis(500)).map(|_instant| Message::BlinkTick)
+            }
+        };
+        Subscription::batch(vec![tick, blink_tick])
     }
 
     /// Handles messages emitted by the application and its widgets.
@@ -261,6 +281,21 @@ impl Application for AppModel {
             }
             Message::PausePomodoroTimer => {
                 self.pomodoro_tick_state = PomodoroTickState::Idle;
+            }
+            Message::BlinkTick => {
+                commands.push(
+                    self.pomodoro
+                        .update(pages::pomodoro::PomodoroMessage::BlinkTick)
+                        .map(cosmic::app::Message::App),
+                );
+            }
+            Message::StartBlinkTimer => {
+                self.blink_tick_state = BlinkTickState::Ticking {
+                    last_tick: Instant::now(),
+                };
+            }
+            Message::StopBlinkTimer => {
+                self.blink_tick_state = BlinkTickState::Idle;
             }
             Message::Open(url) => {
                 if let Err(err) = open::that_detached(url) {
