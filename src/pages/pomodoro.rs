@@ -20,6 +20,7 @@ pub enum PomodoroMessage {
     StartPomodoro,
     PausePomodoro,
     ResetPomodoro,
+    BlinkTick,
 }
 
 pub struct Pomodoro {
@@ -33,6 +34,8 @@ pub struct Pomodoro {
     pomodoro_before_long_pause: u32,
     history: Vec<CompletedItem>,
     notifications_active: bool,
+    blink_count: u32,
+    blink_on: bool,
 }
 
 impl Default for Pomodoro {
@@ -51,6 +54,8 @@ impl Default for Pomodoro {
             pomodoro_before_long_pause: config.pomodoro_before_long_pause,
             history: Vec::new(),
             notifications_active: config.notifications_active,
+            blink_count: 0,
+            blink_on: false,
         }
     }
 }
@@ -99,12 +104,26 @@ impl Pomodoro {
             .push(self.history_view())
             .align_x(Alignment::Center);
 
-        widget::container(col)
+        let container = widget::container(col)
             .width(Length::Fill)
             .height(Length::Fill)
             .align_x(Alignment::Center)
-            .align_y(Alignment::Center)
+            .align_y(Alignment::Center);
+
+        // Apply blinking effect by changing container style
+        if self.blink_on {
+            container.class(cosmic::theme::Container::custom(|theme| {
+                let mut appearance = cosmic::iced_style::container::Style::default();
+                // Use a bright color for the blink effect
+                appearance.background = Some(cosmic::iced::Background::Color(
+                    cosmic::iced::Color::from_rgb(1.0, 0.3, 0.3),
+                ));
+                appearance
+            }))
             .into()
+        } else {
+            container.into()
+        }
     }
 
     pub fn history_view<'a>(&'a self) -> Element<'a, PomodoroMessage> {
@@ -192,6 +211,10 @@ impl Pomodoro {
                 self.slider_value -= 1.;
 
                 if self.slider_value <= 0. {
+                    // Start blinking animation when timer reaches zero
+                    self.blink_count = 0;
+                    commands.push(Task::perform(async {}, |_| Message::StartBlinkTimer));
+
                     if self.pomodoro_completed < self.pomodoro_before_long_pause {
                         if self.slider_max_value == self.timer_duration as f32 * 60. {
                             // Pomodoro just finished, start short pause
@@ -265,6 +288,18 @@ impl Pomodoro {
                 }
                 self.reset_all();
             }
+            PomodoroMessage::BlinkTick => {
+                // Toggle blink state and increment counter
+                self.blink_on = !self.blink_on;
+                self.blink_count += 1;
+
+                // Stop blinking after 10 blinks (5 seconds at 0.5s intervals)
+                if self.blink_count >= 10 {
+                    self.blink_on = false;
+                    self.blink_count = 0;
+                    commands.push(Task::perform(async {}, |_| Message::StopBlinkTimer));
+                }
+            }
         }
         Task::batch(commands)
     }
@@ -282,6 +317,12 @@ impl Pomodoro {
         self.pomodoro_before_long_pause = config.pomodoro_before_long_pause;
         self.history = Vec::new();
         self.notifications_active = config.notifications_active;
+        self.blink_count = 0;
+        self.blink_on = false;
+    }
+
+    pub fn is_blinking(&self) -> bool {
+        self.blink_count > 0 && self.blink_count < 10
     }
 
     fn format_slider_value(&self) -> String {
