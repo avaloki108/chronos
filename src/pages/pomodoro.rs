@@ -8,6 +8,9 @@ use notify_rust::Notification;
 
 use crate::{app::Message, config::Config, fl};
 
+// Bright red color for the blink effect
+const BLINK_COLOR: cosmic::iced::Color = cosmic::iced::Color::from_rgb(1.0, 0.3, 0.3);
+
 enum CompletedItem {
     Pomodoro(u32),
     Pause(u32),
@@ -114,10 +117,7 @@ impl Pomodoro {
         if self.blink_on {
             container.class(cosmic::theme::Container::custom(|theme| {
                 let mut appearance = cosmic::iced_style::container::Style::default();
-                // Use a bright color for the blink effect
-                appearance.background = Some(cosmic::iced::Background::Color(
-                    cosmic::iced::Color::from_rgb(1.0, 0.3, 0.3),
-                ));
+                appearance.background = Some(cosmic::iced::Background::Color(BLINK_COLOR));
                 appearance
             }))
             .into()
@@ -212,6 +212,7 @@ impl Pomodoro {
 
                 if self.slider_value <= 0. {
                     // Start blinking animation when timer reaches zero
+                    // Reset to ensure a clean start for the new blink cycle
                     self.blink_count = 0;
                     commands.push(Task::perform(async {}, |_| Message::StartBlinkTimer));
 
@@ -319,10 +320,6 @@ impl Pomodoro {
         self.notifications_active = config.notifications_active;
         self.blink_count = 0;
         self.blink_on = false;
-    }
-
-    pub fn is_blinking(&self) -> bool {
-        self.blink_count > 0 && self.blink_count < 10
     }
 
     fn format_slider_value(&self) -> String {
