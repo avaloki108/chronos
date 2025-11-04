@@ -115,7 +115,7 @@ impl Pomodoro {
 
         // Apply blinking effect by changing container style
         if self.blink_on {
-            container.class(cosmic::theme::Container::custom(|theme| {
+            container.class(cosmic::theme::Container::custom(|_theme| {
                 let mut appearance = cosmic::iced_style::container::Style::default();
                 appearance.background = Some(cosmic::iced::Background::Color(BLINK_COLOR));
                 appearance
@@ -212,8 +212,6 @@ impl Pomodoro {
 
                 if self.slider_value <= 0. {
                     // Start blinking animation when timer reaches zero
-                    // Reset to ensure a clean start for the new blink cycle
-                    self.blink_count = 0;
                     commands.push(Task::perform(async {}, |_| Message::StartBlinkTimer));
 
                     if self.pomodoro_completed < self.pomodoro_before_long_pause {
